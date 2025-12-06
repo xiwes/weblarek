@@ -33,3 +33,20 @@ export interface IOrder {
   buyer: IBuyer;
 }
 
+
+export interface IBuyerErrors {
+  payment?: string;
+  email?: string;
+  phone?: string;
+  address?: string;
+}
+
+export interface IPage {
+  catalog: HTMLElement[];
+  counter: number;
+  locked: boolean;
+}
+
+export interface IModalData {
+  content: HTMLElement | null;
+}
