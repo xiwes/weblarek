@@ -1,0 +1,63 @@
+export type ApiPostMethods = 'POST' | 'PUT' | 'DELETE';
+
+export interface IApi {
+  get<T extends object>(uri: string): Promise<T>;
+  post<T extends object>(uri: string, data: object, method?: ApiPostMethods): Promise<T>;
+}
+
+export type TPayment = 'card' | 'cash';
+
+export interface IProduct {
+  id: string;
+  description: string;
+  image: string;
+  title: string;
+  category: string;
+  price: number | null;
+}
+
+export interface IBuyer {
+  payment: TPayment;
+  email: string;
+  phone: string;
+  address: string;
+}
+
+/**
+ * Объект заказа, отправляемый на сервер при оформлении покупки.
+ * items — массив идентификаторов товаров,
+ * buyer — данные покупателя,
+ * total — сумма заказа.
+ */
+export interface IOrder {
+  items: string[];
+  buyer: IBuyer;
+  total: number;
+}
+
+export interface IBuyerErrors {
+  payment?: string;
+  email?: string;
+  phone?: string;
+  address?: string;
+}
+
+export interface IPage {
+  catalog: HTMLElement[];
+  counter: number;
+  locked: boolean;
+}
+
+export interface IModalData {
+  content: HTMLElement | null;
+}
+
+export interface IBasketView {
+  items: HTMLElement[];
+  total: number;
+}
+
+export interface IFormState {
+  valid: boolean;
+  errors: string[];
+}
