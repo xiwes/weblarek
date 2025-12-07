@@ -1,13 +1,14 @@
 import { View } from '../base/View';
-import { IEvents } from '../base/events';
+import { IEvents } from '../base/Events';
 import { ensureElement } from '../../utils/utils';
+import { IFormState } from '../../types';
 
-export interface IFormState {
-  valid: boolean;
-  errors: string[];
-}
-
-export class Form extends View<IFormState> {
+/**
+ * Базовый класс формы.
+ * Не хранит бизнес-данные, только управляет разметкой
+ * и пробрасывает события наружу через абстрактные методы.
+ */
+export abstract class Form extends View<IFormState> {
   protected submitButton: HTMLButtonElement;
   protected errorsElement: HTMLElement;
 
@@ -45,9 +46,7 @@ export class Form extends View<IFormState> {
     this.errorsElement.textContent = errors.join(', ');
   }
 
-  render(data?: Partial<IFormState>): HTMLElement {
-    if (!data) return this.container;
-
+  render(data: Partial<IFormState> = {}): HTMLElement {
     if (typeof data.valid === 'boolean') {
       this.setValid(data.valid);
     }
@@ -59,11 +58,7 @@ export class Form extends View<IFormState> {
     return this.container;
   }
 
-  // Переопределяются в наследниках (OrderForm, ContactsForm)
-  // Здесь просто заглушки
-  // eslint-disable-next-line @typescript-eslint/no-empty-function
-  protected onSubmit(): void {}
+  protected abstract onSubmit(): void;
 
-  // eslint-disable-next-line @typescript-eslint/no-empty-function
-  protected onInputChange(field: string, value: string): void {}
+  protected abstract onInputChange(field: string, value: string): void;
 }

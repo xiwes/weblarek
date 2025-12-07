@@ -1,5 +1,5 @@
 import { Form } from './Form';
-import { IEvents } from '../base/events';
+import { IEvents } from '../base/Events';
 import { ensureElement } from '../../utils/utils';
 import { TPayment } from '../../types';
 
@@ -11,19 +11,28 @@ export class OrderForm extends Form {
   constructor(form: HTMLFormElement, events: IEvents) {
     super(form, events);
 
-    this.addressInput = ensureElement<HTMLInputElement>('input[name="address"]', form);
-    this.cardButton = ensureElement<HTMLButtonElement>('button[name="card"]', form);
-    this.cashButton = ensureElement<HTMLButtonElement>('button[name="cash"]', form);
+    this.addressInput = ensureElement<HTMLInputElement>(
+      'input[name="address"]',
+      form
+    );
+    this.cardButton = ensureElement<HTMLButtonElement>(
+      'button[name="card"]',
+      form
+    );
+    this.cashButton = ensureElement<HTMLButtonElement>(
+      'button[name="cash"]',
+      form
+    );
 
     this.cardButton.addEventListener('click', (event) => {
       event.preventDefault();
-      this.setPayment('card');
+      // представление не решает, как себя перерисовывать —
+      // только уведомляет презентер
       this.events.emit('order.payment:change', { payment: 'card' as TPayment });
     });
 
     this.cashButton.addEventListener('click', (event) => {
       event.preventDefault();
-      this.setPayment('cash');
       this.events.emit('order.payment:change', { payment: 'cash' as TPayment });
     });
   }

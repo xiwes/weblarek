@@ -1,4 +1,5 @@
 import { IProduct } from '../../types';
+import { IEvents } from '../base/Events';
 
 /**
  * Модель данных корзины.
@@ -6,6 +7,18 @@ import { IProduct } from '../../types';
  */
 export class Cart {
   private items: IProduct[] = [];
+  private events?: IEvents;
+
+  constructor(events?: IEvents) {
+    this.events = events;
+  }
+
+  private emitChange(): void {
+    this.events?.emit('cart:change', {
+      items: this.items,
+      total: this.getTotalPrice(),
+    });
+  }
 
   /**
    * Получить все товары в корзине.
@@ -15,26 +28,35 @@ export class Cart {
   }
 
   /**
-   * Добавить товар в корзину (если его ещё нет).
+   * Добавить товар в корзину (если его ещё нет) и уведомить презентер.
    */
   addItem(product: IProduct): void {
     if (!this.items.find((item) => item.id === product.id)) {
       this.items.push(product);
+      this.emitChange();
     }
   }
 
   /**
-   * Удалить товар из корзины.
+   * Удалить товар из корзины и уведомить презентер.
    */
   removeItem(product: IProduct): void {
+    const initialLength = this.items.length;
     this.items = this.items.filter((item) => item.id !== product.id);
+
+    if (this.items.length !== initialLength) {
+      this.emitChange();
+    }
   }
 
   /**
-   * Очистить корзину.
+   * Очистить корзину и уведомить презентер.
    */
   clear(): void {
-    this.items = [];
+    if (this.items.length) {
+      this.items = [];
+      this.emitChange();
+    }
   }
 
   /**

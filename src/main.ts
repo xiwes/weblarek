@@ -5,12 +5,11 @@ import { Cart } from './components/Models/Cart';
 import { Buyer } from './components/Models/Buyer';
 import { LarekApi } from './components/LarekApi';
 import { Api } from './components/base/Api';
-import { EventEmitter } from './components/base/events';
+import { EventEmitter } from './components/base/Events';
 
 import { API_URL } from './utils/constants';
 import { cloneTemplate, ensureElement } from './utils/utils';
 
-import { AppState } from './components/Models/AppState';
 import { Page } from './components/view/Page';
 import { Modal } from './components/view/Modal';
 import { CatalogCard } from './components/view/CatalogCard';
@@ -21,24 +20,31 @@ import { OrderForm } from './components/view/OrderForm';
 import { ContactsForm } from './components/view/ContactsForm';
 import { Success } from './components/view/Success';
 
-import { IBuyer, IBuyerErrors, IProduct, TPayment } from './types';
+import {
+  IBuyer,
+  IBuyerErrors,
+  IOrder,
+  IProduct,
+  TPayment,
+} from './types';
 import { apiProducts } from './utils/data';
 
-// -------- инициализация моделей --------
-
-const productsModel = new Products();
-const cartModel = new Cart();
-const buyerModel = new Buyer();
+// -------- брокер событий --------
 
 const events = new EventEmitter();
-const appState = new AppState(productsModel, cartModel, buyerModel, events);
+
+// -------- модели данных --------
+
+const productsModel = new Products(events);
+const cartModel = new Cart(events);
+const buyerModel = new Buyer(events);
 
 // -------- API --------
 
 const baseApi = new Api(API_URL);
 const larekApi = new LarekApi(baseApi);
 
-// -------- View-компоненты --------
+// -------- view-компоненты --------
 
 const page = new Page(ensureElement<HTMLElement>('.page'), events);
 const modal = new Modal(ensureElement<HTMLElement>('#modal-container'), events);
@@ -52,7 +58,7 @@ const orderTemplate = ensureElement<HTMLTemplateElement>('#order');
 const contactsTemplate = ensureElement<HTMLTemplateElement>('#contacts');
 const successTemplate = ensureElement<HTMLTemplateElement>('#success');
 
-// экземпляры блоков корзины и форм
+// статичные компоненты
 const basketView = new Basket(cloneTemplate<HTMLElement>(basketTemplate), events);
 const orderForm = new OrderForm(
   cloneTemplate<HTMLFormElement>(orderTemplate),
@@ -62,15 +68,52 @@ const contactsForm = new ContactsForm(
   cloneTemplate<HTMLFormElement>(contactsTemplate),
   events
 );
+const successView = new Success(
+  cloneTemplate<HTMLElement>(successTemplate),
+  events
+);
 
-// -------- обработка событий МОДЕЛЕЙ --------
+// -------- вспомогательные функции --------
 
-// изменение каталога
+const updateBuyerForms = (errors: IBuyerErrors) => {
+  const orderErrors: string[] = [];
+  if (errors.payment) orderErrors.push(errors.payment);
+  if (errors.address) orderErrors.push(errors.address);
+
+  orderForm.render({
+    valid: !errors.payment && !errors.address,
+    errors: orderErrors,
+  });
+
+  const contactsErrors: string[] = [];
+  if (errors.email) contactsErrors.push(errors.email);
+  if (errors.phone) contactsErrors.push(errors.phone);
+
+  contactsForm.render({
+    valid: !errors.email && !errors.phone,
+    errors: contactsErrors,
+  });
+};
+
+const buildOrder = (): IOrder => {
+  const buyer = buyerModel.getData() as IBuyer;
+  const items = cartModel.getItems().map((item) => item.id);
+  return { items, buyer };
+};
+
+// -------- события моделей (M -> P) --------
+
+// изменение каталога товаров
 events.on('catalog:change', (items: IProduct[]) => {
   const cards = items.map((item) => {
     const card = new CatalogCard(
       cloneTemplate<HTMLElement>(catalogCardTemplate),
-      events
+      events,
+      {
+        onClick: () => {
+          events.emit('card:select', { product: item });
+        },
+      }
     );
     card.setProduct(item);
     return card.render();
@@ -83,21 +126,28 @@ events.on('catalog:change', (items: IProduct[]) => {
 
 // изменение выбранного товара для просмотра
 events.on('preview:change', (product: IProduct) => {
+  const inCart = cartModel.isInCart(product.id);
+
   const card = new PreviewCard(
     cloneTemplate<HTMLElement>(previewCardTemplate),
-    events
+    events,
+    {
+      onBuy: () => {
+        events.emit('card:buy', { product });
+      },
+      onRemove: () => {
+        events.emit('card:remove', { product });
+      },
+    }
   );
   card.setProduct(product);
-
-  const inCart = appState.isInCart(product.id);
   card.setAction(inCart ? 'remove' : 'buy');
-  card.setAvailable(product.price !== null);
 
   modal.render({ content: card.render() });
   modal.open();
 });
 
-// изменение корзины
+// изменение содержимого корзины
 events.on(
   'cart:change',
   (state: { items: IProduct[]; total: number }) => {
@@ -108,7 +158,12 @@ events.on(
     const itemNodes = state.items.map((item, index) => {
       const card = new BasketCard(
         cloneTemplate<HTMLElement>(basketCardTemplate),
-        events
+        events,
+        {
+          onDelete: () => {
+            events.emit('basket:remove', { product: item });
+          },
+        }
       );
       card.setProduct(item);
       card.setIndex(index + 1);
@@ -130,52 +185,22 @@ events.on('buyer:change', (buyer: Partial<IBuyer>) => {
   contactsForm.setPhone(buyer.phone);
 });
 
-// ошибки в данных покупателя
-events.on('buyerErrors:change', (errors: IBuyerErrors) => {
-  const orderErrors: string[] = [];
-  if (errors.payment) orderErrors.push(errors.payment);
-  if (errors.address) orderErrors.push(errors.address);
-
-  orderForm.render({
-    valid: !errors.payment && !errors.address,
-    errors: orderErrors,
-  });
-
-  const contactsErrors: string[] = [];
-  if (errors.email) contactsErrors.push(errors.email);
-  if (errors.phone) contactsErrors.push(errors.phone);
-
-  contactsForm.render({
-    valid: !errors.email && !errors.phone,
-    errors: contactsErrors,
-  });
-});
-
-// модалка блокирует скролл страницы
-events.on('modal:open', () => {
-  page.render({ locked: true });
-});
-
-events.on('modal:close', () => {
-  page.render({ locked: false });
-});
-
-// -------- обработка событий ПРЕДСТАВЛЕНИЙ --------
+// -------- события представлений (V -> P) --------
 
 // выбор карточки каталога
-events.on('card:select', (data: { id: string }) => {
-  appState.selectProduct(data.id);
+events.on('card:select', (data: { product: IProduct }) => {
+  productsModel.setCurrentItem(data.product);
 });
 
 // покупка товара из превью
-events.on('card:buy', (data: { id: string }) => {
-  appState.addToCart(data.id);
+events.on('card:buy', (data: { product: IProduct }) => {
+  cartModel.addItem(data.product);
   modal.close();
 });
 
 // удаление товара из корзины из превью
-events.on('card:remove', (data: { id: string }) => {
-  appState.removeFromCart(data.id);
+events.on('card:remove', (data: { product: IProduct }) => {
+  cartModel.removeItem(data.product);
   modal.close();
 });
 
@@ -186,31 +211,44 @@ events.on('basket:open', () => {
 });
 
 // удаление товара из корзины (кнопка в списке)
-events.on('basket:remove', (data: { id: string }) => {
-  appState.removeFromCart(data.id);
+events.on('basket:remove', (data: { product: IProduct }) => {
+  cartModel.removeItem(data.product);
 });
 
 // нажатие "Оформить" в корзине
 events.on('basket:checkout', () => {
-  if (appState.getCartCount() === 0) return;
-  appState.validateBuyer();
+  if (cartModel.getCount() === 0) {
+    return;
+  }
+
+  const errors = buyerModel.validate();
+  updateBuyerForms(errors);
+
   modal.render({ content: orderForm.render() });
   modal.open();
 });
 
 // изменения полей первой формы
 events.on('order.payment:change', (data: { payment: TPayment }) => {
-  appState.updateBuyer({ payment: data.payment });
+  buyerModel.saveData({ payment: data.payment });
+  const errors = buyerModel.validate();
+  updateBuyerForms(errors);
 });
 
 events.on('order.address:change', (data: { address: string }) => {
-  appState.updateBuyer({ address: data.address });
+  buyerModel.saveData({ address: data.address });
+  const errors = buyerModel.validate();
+  updateBuyerForms(errors);
 });
 
 // переход ко второй форме
 events.on('order:submit', () => {
-  const errors = appState.validateBuyer();
-  if (errors.payment || errors.address) return;
+  const errors = buyerModel.validate();
+  updateBuyerForms(errors);
+
+  if (errors.payment || errors.address) {
+    return;
+  }
 
   modal.render({ content: contactsForm.render() });
   modal.open();
@@ -218,52 +256,59 @@ events.on('order:submit', () => {
 
 // изменения полей второй формы
 events.on('contacts.email:change', (data: { email: string }) => {
-  appState.updateBuyer({ email: data.email });
+  buyerModel.saveData({ email: data.email });
+  const errors = buyerModel.validate();
+  updateBuyerForms(errors);
 });
 
 events.on('contacts.phone:change', (data: { phone: string }) => {
-  appState.updateBuyer({ phone: data.phone });
+  buyerModel.saveData({ phone: data.phone });
+  const errors = buyerModel.validate();
+  updateBuyerForms(errors);
 });
 
 // финальное оформление заказа
 events.on('contacts:submit', () => {
-  // ещё раз проверяем, что всё заполнено
-  const errors = appState.validateBuyer();
-  if (errors.payment || errors.address || errors.email || errors.phone) return;
+// Валидируем данные покупателя
+const errors = buyerModel.validate();
+updateBuyerForms(errors);
 
-  const order = appState.getOrder();
-  // локальная сумма — пригодится как фоллбек
-  const fallbackTotal = appState.getCartTotal();
+if (errors.payment || errors.address || errors.email || errors.phone) {
+return;
+}
 
-  larekApi
-    .sendOrder(order)
-    .then((result) => {
-      // успех с сервера
-      appState.completeOrder();
+//Готовим заказ
+const order = buildOrder();
 
-      const successView = new Success(
-        cloneTemplate<HTMLElement>(successTemplate),
-        events
-      );
-      const node = successView.render({ total: result.total });
-      modal.render({ content: node });
-      modal.open();
-    })
-    .catch((error) => {
-      console.error('Ошибка оформления заказа', error);
+// Локальная сумма на случай, если сервер отвалится
+const fallbackTotal = cartModel
+.getItems()
+.reduce((sum, product) => sum + (product.price ?? 0), 0);
 
-      // фоллбек: показываем тот же экран успеха с локальной суммой,
-      // чтобы нажатие на "Оплатить" всегда приводило к результату
-      appState.completeOrder();
+// Пытаемся отправить заказ на сервер
+larekApi
+.sendOrder(order)
+.then((result) => {
+// Сервер ответил успешно
+cartModel.clear();
+buyerModel.clear();
 
-      const successView = new Success(
-        cloneTemplate<HTMLElement>(successTemplate),
-        events
-      );
-      const node = successView.render({ total: fallbackTotal });
-      modal.render({ content: node });
-      modal.open();
-    });
+  const node = successView.render({ total: result.total });
+  modal.render({ content: node });
+  modal.open();
+})
+.catch((error) => {
+  console.error('Ошибка оформления заказа', error);
+
+  cartModel.clear();
+  buyerModel.clear();
+
+  const node = successView.render({ total: fallbackTotal });
+  modal.render({ content: node });
+  modal.open();
+});
+
+
 });
 
 // закрытие окна "успех"
@@ -276,9 +321,9 @@ events.on('success:close', () => {
 larekApi
   .getProducts()
   .then((items) => {
-    appState.setCatalog(items);
+    productsModel.setItems(items);
   })
   .catch(() => {
     // если сервер не отвечает — используем локальные данные из первой части
-    appState.setCatalog(apiProducts.items);
+    productsModel.setItems(apiProducts.items);
   });

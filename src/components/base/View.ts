@@ -1,5 +1,5 @@
 import { Component } from './Component';
-import { IEvents } from './events';
+import { IEvents } from './Events';
 
 export abstract class View<T> extends Component<T> {
   protected events: IEvents;

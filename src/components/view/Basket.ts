@@ -1,8 +1,11 @@
 import { View } from '../base/View';
 import { IBasketView } from '../../types';
-import { IEvents } from '../base/events';
+import { IEvents } from '../base/Events';
 import { ensureElement } from '../../utils/utils';
 
+/**
+ * Представление корзины.
+ */
 export class Basket extends View<IBasketView> {
   private listElement: HTMLElement;
   private totalElement: HTMLElement;
@@ -23,9 +26,11 @@ export class Basket extends View<IBasketView> {
     });
   }
 
-  setItems(items: HTMLElement[]) {
+  set items(items: HTMLElement[]) {
     if (!items.length) {
-      this.listElement.textContent = 'Корзина пуста';
+      // просто очищаем список, отображением "Корзина пуста"
+      // занимается вёрстка/стили
+      this.listElement.innerHTML = '';
       this.buttonElement.disabled = true;
     } else {
       this.listElement.replaceChildren(...items);
@@ -33,14 +38,12 @@ export class Basket extends View<IBasketView> {
     }
   }
 
-  setTotal(total: number) {
+  set total(total: number) {
     this.totalElement.textContent = `${total} синапсов`;
   }
 
-  render(data?: Partial<IBasketView>): HTMLElement {
-    if (!data) return this.container;
-    if (data.items) this.setItems(data.items);
-    if (typeof data.total === 'number') this.setTotal(data.total);
+  render(data: Partial<IBasketView> = {}): HTMLElement {
+    Object.assign(this, data);
     return this.container;
   }
 }

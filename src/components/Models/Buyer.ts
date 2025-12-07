@@ -1,4 +1,5 @@
 import { IBuyer, TPayment } from '../../types';
+import { IEvents } from '../base/Events';
 
 /**
  * Модель данных покупателя.
@@ -9,23 +10,39 @@ export class Buyer {
   private email = '';
   private phone = '';
   private address = '';
+  private events?: IEvents;
+
+  constructor(events?: IEvents) {
+    this.events = events;
+  }
 
   /**
    * Сохранить данные покупателя.
    * Обновляет только те поля, которые переданы в объекте data.
+   * При изменении данных эмитит buyer:change.
    */
   saveData(data: Partial<IBuyer>): void {
-    if (data.payment !== undefined) {
+    let changed = false;
+
+    if (data.payment !== undefined && data.payment !== this.payment) {
       this.payment = data.payment;
+      changed = true;
     }
-    if (data.email !== undefined) {
+    if (data.email !== undefined && data.email !== this.email) {
       this.email = data.email;
+      changed = true;
     }
-    if (data.phone !== undefined) {
+    if (data.phone !== undefined && data.phone !== this.phone) {
       this.phone = data.phone;
+      changed = true;
     }
-    if (data.address !== undefined) {
+    if (data.address !== undefined && data.address !== this.address) {
       this.address = data.address;
+      changed = true;
+    }
+
+    if (changed) {
+      this.events?.emit('buyer:change', this.getData());
     }
   }
 
@@ -42,19 +59,19 @@ export class Buyer {
   }
 
   /**
-   * Очистить все данные покупателя.
+   * Очистить все данные покупателя и уведомить презентер.
    */
   clear(): void {
     this.payment = null;
     this.email = '';
     this.phone = '';
     this.address = '';
+    this.events?.emit('buyer:change', this.getData());
   }
 
   /**
    * Проверить корректность данных.
    * Возвращает объект с ошибками по полям, если они есть.
-   * Поля без ошибок в объект не попадают.
    */
   validate(): { [key in keyof IBuyer]?: string } {
     const errors: { [key in keyof IBuyer]?: string } = {};

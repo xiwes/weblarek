@@ -50,3 +50,13 @@ export interface IPage {
 export interface IModalData {
   content: HTMLElement | null;
 }
+
+export interface IBasketView {
+  items: HTMLElement[];
+  total: number;
+}
+
+export interface IFormState {
+  valid: boolean;
+  errors: string[];
+}
